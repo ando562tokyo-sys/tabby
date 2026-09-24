@@ -1,0 +1,70 @@
+h3.mb-3(translate) AI Assistant
+
+h5(translate) Ollama connection
+.form-line
+    .header
+        .title(translate) Endpoint
+    input.form-control.w-50(
+        type='text',
+        placeholder='http://localhost:11434',
+        [(ngModel)]='config.store.ollamaAssistant.endpoint',
+        (ngModelChange)='config.save()',
+    )
+
+.form-line
+    .header
+        .title(translate) Model
+    .input-group.w-50
+        select.form-select(
+            [(ngModel)]='config.store.ollamaAssistant.model',
+            (ngModelChange)='config.save()',
+        )
+            option(value='') (select a model)
+            option(*ngFor='let m of models', [value]='m') {{m}}
+        button.btn.btn-outline-secondary((click)='refreshModels()', [disabled]='loadingModels')
+            span(*ngIf='!loadingModels', translate) Fetch models
+            span(*ngIf='loadingModels', translate) Loading...
+
+.form-line
+    .header
+        .title(translate) System prompt
+    textarea.form-control(
+        rows='10',
+        [(ngModel)]='config.store.ollamaAssistant.systemPrompt',
+        (ngModelChange)='config.save()',
+    )
+    button.btn.btn-outline-secondary.mt-2((click)='resetSystemPrompt()')
+        span(translate) Reset to default
+
+hr
+
+h5(translate) SSH key generation
+.form-line
+    .header
+        .title(translate) Comment (appended to the public key)
+    input.form-control.w-50(
+        type='text',
+        placeholder='user@host',
+        [(ngModel)]='keygenComment',
+    )
+button.btn.btn-primary.mb-3((click)='generateKeyPair()')
+    span(translate) Generate RSA 4096 key pair
+
+div(*ngIf='generatedPrivateKey')
+    .form-line
+        .header
+            .title(translate) Private key (PEM)
+        textarea.form-control(rows='10', readonly, [value]='generatedPrivateKey')
+        .mt-1
+            button.btn.btn-sm.btn-outline-secondary.me-2((click)='savePrivateKey()')
+                span(translate) Save to file...
+            button.btn.btn-sm.btn-outline-secondary((click)='copyToClipboard(generatedPrivateKey)')
+                span(translate) Copy
+
+    .form-line
+        .header
+            .title(translate) Public key
+        textarea.form-control(rows='3', readonly, [value]='generatedPublicKey')
+        .mt-1
+            button.btn.btn-sm.btn-outline-secondary((click)='copyToClipboard(generatedPublicKey)')
+                span(translate) Copy

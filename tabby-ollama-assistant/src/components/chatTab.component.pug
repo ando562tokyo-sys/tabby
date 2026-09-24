@@ -1,0 +1,74 @@
+.chat-tab.d-flex.h-100
+    .chat-main.d-flex.flex-column.flex-grow-1
+
+        .toolbar.d-flex.align-items-center.px-2.py-1.border-bottom
+            span.me-2(translate) Target session:
+            select.form-select.form-select-sm.w-auto(
+                [(ngModel)]='targetTab',
+            )
+                option(*ngFor='let tab of targetTabs', [ngValue]='tab') {{tab.title}}
+                option(*ngIf='!targetTabs.length', [ngValue]='null', disabled) No open terminal tabs
+            .flex-grow-1
+            button.btn.btn-link.btn-sm((click)='showMacros = !showMacros')
+                i.fas.fa-list.me-1
+                span(translate) Macros
+
+        .messages.flex-grow-1.overflow-auto.p-3
+            .message(*ngFor='let message of messages', [ngClass]='"message-" + message.role')
+                ng-container(*ngFor='let segment of message.textSegments; let i = index')
+                    .message-text(*ngIf='segment') {{segment}}
+                    .command-block(*ngIf='message.blocks[i]')
+                        pre.mb-2 {{message.blocks[i].commands.join('\n')}}
+                        button.btn.btn-sm.btn-primary.me-2(
+                            *ngIf='message.blocks[i].status === "idle"',
+                            (click)='runBlock(message, message.blocks[i])',
+                            [disabled]='!targetTab',
+                        )
+                            i.fas.fa-play.me-1
+                            span(translate) Run
+                        span.text-muted(*ngIf='message.blocks[i].status === "running"')
+                            i.fas.fa-spinner.fa-spin.me-1
+                            span(translate) Running...
+                        .command-result(*ngFor='let r of message.blocks[i].results')
+                            .command-result-cmd $ {{r.command}}
+                            pre.command-result-output {{r.output}}
+
+            .message.message-assistant(*ngIf='pendingReplyText !== null')
+                .message-text {{pendingReplyText}}
+                i.fas.fa-spinner.fa-spin.ms-1(*ngIf='!pendingReplyText')
+
+        .input-bar.d-flex.p-2.border-top
+            textarea.form-control.me-2(
+                rows='2',
+                placeholder='Ask about your server...',
+                [(ngModel)]='input',
+                (keydown)='onInputKeydown($event)',
+                [disabled]='sending',
+            )
+            button.btn.btn-primary((click)='send()', [disabled]='sending || !input.trim()')
+                span(translate) Send
+
+    .macros-panel.border-start.p-2(*ngIf='showMacros')
+        h6(translate) Macros
+        .macro-item.d-flex.align-items-center.mb-1(*ngFor='let macro of macros.list()')
+            span.flex-grow-1 {{macro.name}}
+            button.btn.btn-sm.btn-link((click)='runMacro(macro)', [disabled]='!targetTab')
+                i.fas.fa-play
+            button.btn.btn-sm.btn-link((click)='openMacroForm(macro)')
+                i.fas.fa-pen
+            button.btn.btn-sm.btn-link.text-danger((click)='deleteMacro(macro)')
+                i.fas.fa-trash
+
+        hr
+        h6 {{editingMacro ? 'Edit macro' : 'New macro'}}
+        input.form-control.form-control-sm.mb-2(
+            type='text',
+            placeholder='Macro name',
+            [(ngModel)]='macroFormName',
+        )
+        textarea.form-control.form-control-sm.mb-2(
+            rows='6',
+            placeholder='One command per line',
+            [(ngModel)]='macroFormCommands',
+        )
+        button.btn.btn-sm.btn-primary((click)='saveMacro()') Save

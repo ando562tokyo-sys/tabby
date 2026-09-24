@@ -1,0 +1,62 @@
+.chat-tab {
+    .messages {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .message {
+        max-width: 90%;
+
+        &.message-user {
+            align-self: flex-end;
+            .message-text {
+                background: rgba(127, 127, 127, 0.2);
+                border-radius: 8px;
+                padding: 6px 10px;
+            }
+        }
+
+        &.message-assistant .message-text {
+            color: var(--bs-info, #4b9fd5);
+        }
+
+        &.message-system .message-text {
+            color: var(--bs-secondary, #888);
+            font-style: italic;
+        }
+    }
+
+    .message-text {
+        white-space: pre-wrap;
+    }
+
+    .command-block {
+        pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 6px;
+        }
+    }
+
+    .command-result {
+        margin-top: 6px;
+        .command-result-cmd {
+            font-weight: 600;
+        }
+        .command-result-output {
+            white-space: pre-wrap;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 6px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow: auto;
+        }
+    }
+
+    .macros-panel {
+        width: 280px;
+        flex-shrink: 0;
+        overflow-y: auto;
+    }
+}

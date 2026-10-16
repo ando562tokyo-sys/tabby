@@ -16,6 +16,13 @@
 
         .messages.flex-grow-1.overflow-auto.p-3(#messagesContainer)
             .message(*ngFor='let message of messages', [ngClass]='"message-" + message.role')
+                button.btn.btn-sm.btn-outline-secondary.mb-1(
+                    *ngIf='message.showAskAiButton',
+                    (click)='askAiAnyway(message)',
+                    [disabled]='sending',
+                )
+                    span それでもAIに質問する
+
                 ng-container(*ngFor='let segment of message.textSegments; let i = index')
                     .message-text(*ngIf='segment && message.role !== "assistant"') {{segment}}
                     .message-text(*ngIf='segment && message.role === "assistant"', [innerHTML]='formatAssistantText(segment)')

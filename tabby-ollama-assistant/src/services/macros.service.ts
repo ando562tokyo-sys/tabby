@@ -11,27 +11,29 @@ function generateId (): string {
 /**
  * Resolves once a session's output has gone quiet for `idleMs`, or after `maxMs`
  * regardless, as a safety net for commands that never produce a recognizable prompt.
+ * The resolved value is `true` if it was cut off by `maxMs` rather than going idle
+ * normally, meaning the command may still be running on the server.
  */
-export function waitForSessionIdle (session: BaseSession, idleMs = 400, maxMs = 15000): Promise<void> {
+export function waitForSessionIdle (session: BaseSession, idleMs = 400, maxMs = 15000): Promise<boolean> {
     return new Promise(resolve => {
         let idleTimer: ReturnType<typeof setTimeout> | undefined = undefined
         let sub: { unsubscribe: () => void } | undefined = undefined
         let maxTimer: ReturnType<typeof setTimeout> | undefined = undefined
 
-        const finish = (): void => {
+        const finish = (timedOut: boolean): void => {
             sub?.unsubscribe()
             clearTimeout(idleTimer)
             clearTimeout(maxTimer)
-            resolve()
+            resolve(timedOut)
         }
 
         const resetIdleTimer = (): void => {
             clearTimeout(idleTimer)
-            idleTimer = setTimeout(finish, idleMs)
+            idleTimer = setTimeout(() => finish(false), idleMs)
         }
 
         sub = session.output$.subscribe(() => resetIdleTimer())
-        maxTimer = setTimeout(finish, maxMs)
+        maxTimer = setTimeout(() => finish(true), maxMs)
         resetIdleTimer()
     })
 }
@@ -39,6 +41,7 @@ export function waitForSessionIdle (session: BaseSession, idleMs = 400, maxMs = 
 export interface MacroRunResult {
     command: string
     output: string
+    timedOut: boolean
 }
 
 @Injectable({ providedIn: 'root' })
@@ -78,9 +81,9 @@ export class MacrosService {
             let output = ''
             const sub = session.output$.subscribe(chunk => { output += chunk })
             session.feedFromTerminal(Buffer.from(command + '\n'))
-            await waitForSessionIdle(session)
+            const timedOut = await waitForSessionIdle(session)
             sub.unsubscribe()
-            onCommandOutput({ command, output })
+            onCommandOutput({ command, output, timedOut })
         }
     }
 }

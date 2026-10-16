@@ -41,6 +41,9 @@ export class OllamaSettingsTabComponent {
     }
 
     generateKeyPair (): void {
+        if (this.generatedPrivateKey && !window.confirm('既に生成した鍵が表示されています。新しい鍵ペアを生成すると表示が上書きされます。よろしいですか?')) {
+            return
+        }
         const pair = this.keygen.generate(this.keygenComment)
         this.generatedPrivateKey = pair.privateKey
         this.generatedPublicKey = pair.publicKey
@@ -48,6 +51,7 @@ export class OllamaSettingsTabComponent {
 
     copyToClipboard (text: string): void {
         this.platform.setClipboard({ text })
+        this.notifications.info('クリップボードにコピーしました。')
     }
 
     async savePrivateKey (): Promise<void> {
@@ -61,5 +65,6 @@ export class OllamaSettingsTabComponent {
         }
         await transfer.write(buffer)
         transfer.close()
+        this.notifications.info('秘密鍵を保存しました。')
     }
 }

@@ -7,8 +7,10 @@ import { SettingsTabProvider } from 'tabby-settings'
 
 import { OllamaChatTabComponent } from './components/chatTab.component'
 import { OllamaSettingsTabComponent } from './components/settingsTab.component'
+import { FileTransferTabComponent } from './components/fileTransferTab.component'
 import { OllamaAssistantButtonProvider } from './buttonProvider'
 import { LoggingButtonProvider } from './loggingButtonProvider'
+import { FileTransferButtonProvider } from './fileTransferButtonProvider'
 import { OllamaAssistantSettingsTabProvider } from './settings'
 import { OllamaAssistantConfigProvider } from './config'
 import { ChatRecoveryProvider } from './recoveryProvider'
@@ -22,10 +24,12 @@ import { ChatRecoveryProvider } from './recoveryProvider'
     declarations: [
         OllamaChatTabComponent,
         OllamaSettingsTabComponent,
+        FileTransferTabComponent,
     ],
     providers: [
         { provide: ToolbarButtonProvider, useClass: OllamaAssistantButtonProvider, multi: true },
         { provide: ToolbarButtonProvider, useClass: LoggingButtonProvider, multi: true },
+        { provide: ToolbarButtonProvider, useClass: FileTransferButtonProvider, multi: true },
         { provide: SettingsTabProvider, useClass: OllamaAssistantSettingsTabProvider, multi: true },
         { provide: ConfigProvider, useClass: OllamaAssistantConfigProvider, multi: true },
         { provide: TabRecoveryProvider, useClass: ChatRecoveryProvider, multi: true },

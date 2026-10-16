@@ -20,11 +20,19 @@ export interface DisplayMessage {
     /** Text segments interleaved with command blocks: text[0], block[0], text[1], block[1], ... */
     textSegments: string[]
     blocks: CommandBlock[]
+    /** Shown on a 'system' detection notice to let the user send the text to the AI anyway. */
+    showAskAiButton?: boolean
 }
 
 const COMMAND_BLOCK_RE = /```(?:bash|sh)?\n([\s\S]*?)```/g
 
-function parseReply (text: string): DisplayMessage {
+/**
+ * Splits text into alternating plain-text segments and ```bash/```sh command
+ * blocks. Used both for the AI's own replies and for text the user pastes in
+ * directly (e.g. instructions copied from a conversation with another AI),
+ * so pasted commands get the same editable/dangerous-command/run UI.
+ */
+function parseMessage (text: string, role: DisplayMessage['role']): DisplayMessage {
     const textSegments: string[] = []
     const blocks: CommandBlock[] = []
     let lastIndex = 0
@@ -36,7 +44,7 @@ function parseReply (text: string): DisplayMessage {
         lastIndex = COMMAND_BLOCK_RE.lastIndex
     }
     textSegments.push(text.slice(lastIndex).trim())
-    return { role: 'assistant', textSegments, blocks }
+    return { role, textSegments, blocks }
 }
 
 function commandsOf (block: CommandBlock): string[] {
@@ -134,10 +142,33 @@ export class OllamaChatTabComponent extends BaseTabComponent {
             return
         }
         this.input = ''
-        this.messages.push({ role: 'user', textSegments: [text], blocks: [] })
+        const parsedInput = parseMessage(text, 'user')
+        this.messages.push(parsedInput)
         this.history.push({ role: 'user', content: text })
         this.scrollToBottom()
 
+        if (parsedInput.blocks.length > 0) {
+            // 他所でAIに相談して得たコマンド入りの指示をそのまま貼り付けた場合は、
+            // Ollamaに聞き直さずそのままコマンド候補として表示する。
+            this.messages.push({
+                role: 'system',
+                textSegments: ['コードブロックを検出したため、AIには送らずコマンドの候補として表示しました。'],
+                blocks: [],
+                showAskAiButton: true,
+            })
+            this.scrollToBottom()
+            return
+        }
+
+        await this.askAi()
+    }
+
+    async askAiAnyway (notice: DisplayMessage): Promise<void> {
+        notice.showAskAiButton = false
+        await this.askAi()
+    }
+
+    private async askAi (): Promise<void> {
         this.sending = true
         this.pendingReplyText = ''
         try {
@@ -146,7 +177,7 @@ export class OllamaChatTabComponent extends BaseTabComponent {
                 this.scrollToBottom()
             })
             this.history.push({ role: 'assistant', content: full })
-            this.messages.push(parseReply(full))
+            this.messages.push(parseMessage(full, 'assistant'))
         } catch (error) {
             this.notifications.error(error.message ?? String(error))
         } finally {

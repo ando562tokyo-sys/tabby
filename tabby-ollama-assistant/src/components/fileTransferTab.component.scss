@@ -1,0 +1,65 @@
+.transfer-tab {
+    .panes {
+        min-height: 0;
+    }
+
+    .pane {
+        flex: 1;
+        min-width: 0;
+        border-right: 1px solid rgba(127, 127, 127, 0.2);
+
+        &:last-child {
+            border-right: none;
+        }
+    }
+
+    .pane-path {
+        font-size: 12px;
+        font-family: var(--bs-font-monospace, monospace);
+    }
+
+    .pane-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-size: 13px;
+        border-bottom: 1px solid rgba(127, 127, 127, 0.1);
+
+        &:hover {
+            background: rgba(127, 127, 127, 0.1);
+        }
+
+        &.is-selected {
+            background: rgba(75, 159, 213, 0.25);
+        }
+    }
+
+    .pane-row__name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pane-row__size {
+        color: var(--bs-secondary, #888);
+        font-size: 12px;
+        flex-shrink: 0;
+    }
+
+    .pane-actions {
+        flex-shrink: 0;
+        width: 56px;
+    }
+
+    .transfers {
+        font-size: 13px;
+    }
+
+    .transfer-row {
+        padding: 2px 0;
+    }
+}

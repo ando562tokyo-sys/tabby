@@ -1,0 +1,60 @@
+.transfer-tab.d-flex.flex-column.h-100
+    .toolbar.d-flex.align-items-center.px-2.py-1.border-bottom
+        span.me-2 対象サーバー:
+        select.form-select.form-select-sm.w-auto(
+            *ngIf='targetTabs.length',
+            [(ngModel)]='targetTab',
+            (ngModelChange)='onTargetTabChange()',
+        )
+            option(*ngFor='let tab of targetTabs', [ngValue]='tab') {{tab.title}}
+        span.text-muted.small(*ngIf='!targetTabs.length') (SSH端末タブを開くと選択できます)
+        span.text-muted.small.ms-2(*ngIf='connecting')
+            i.fas.fa-spinner.fa-spin.me-1
+            span 接続中...
+
+    .panes.d-flex.flex-grow-1.overflow-hidden
+        .pane.d-flex.flex-column
+            .pane-header.d-flex.align-items-center.px-2.py-1.border-bottom
+                button.btn.btn-sm.btn-outline-secondary.me-1((click)='loadLocalDir(localParent)', [disabled]='!localParent') ↑
+                span.pane-path.flex-grow-1.text-truncate([title]='localPath') {{localPath}}
+                button.btn.btn-sm.btn-outline-secondary.me-1((click)='localMkdir()') 新規フォルダ
+                button.btn.btn-sm.btn-outline-secondary((click)='localDelete()') 削除
+            .pane-list.flex-grow-1.overflow-auto
+                .pane-row(
+                    *ngFor='let entry of localEntries',
+                    [class.is-selected]='entry.name === selectedLocalName',
+                    (click)='selectedLocalName = entry.name',
+                    (dblclick)='onLocalEntryOpen(entry)',
+                )
+                    span.pane-row__icon {{entry.isDirectory ? '📁' : '📄'}}
+                    span.pane-row__name {{entry.name}}
+                    span.pane-row__size {{entry.isDirectory ? '' : formatBytes(entry.size)}}
+                p.text-muted.small.p-2(*ngIf='!localEntries.length') (空です)
+
+        .pane-actions.d-flex.flex-column.justify-content-center.px-2
+            button.btn.btn-primary.btn-sm.mb-2((click)='uploadSelected()', [disabled]='!sftp', title='ローカル→リモートへアップロード') →
+            button.btn.btn-primary.btn-sm((click)='downloadSelected()', [disabled]='!sftp', title='リモート→ローカルへダウンロード') ←
+
+        .pane.d-flex.flex-column
+            .pane-header.d-flex.align-items-center.px-2.py-1.border-bottom
+                button.btn.btn-sm.btn-outline-secondary.me-1((click)='loadRemoteDir(remoteParent)', [disabled]='!remoteParent') ↑
+                span.pane-path.flex-grow-1.text-truncate([title]='remotePath') {{remotePath}}
+                button.btn.btn-sm.btn-outline-secondary.me-1((click)='remoteMkdir()', [disabled]='!sftp') 新規フォルダ
+                button.btn.btn-sm.btn-outline-secondary((click)='remoteDelete()', [disabled]='!sftp') 削除
+            .pane-list.flex-grow-1.overflow-auto
+                p.text-muted.small.p-2(*ngIf='!sftp') 対象サーバーを選択してください。
+                .pane-row(
+                    *ngFor='let entry of remoteEntries',
+                    [class.is-selected]='entry.name === selectedRemoteName',
+                    (click)='selectedRemoteName = entry.name',
+                    (dblclick)='onRemoteEntryOpen(entry)',
+                )
+                    span.pane-row__icon {{entry.isDirectory ? '📁' : '📄'}}
+                    span.pane-row__name {{entry.name}}
+                    span.pane-row__size {{entry.isDirectory ? '' : formatBytes(entry.size)}}
+                p.text-muted.small.p-2(*ngIf='sftp && !remoteEntries.length') (空です)
+
+    .transfers.border-top.p-2(*ngIf='transfers.length')
+        .transfer-row(*ngFor='let t of transfers')
+            i.fas.fa-spinner.fa-spin.me-2
+            span {{t.label}}

@@ -2,36 +2,61 @@
     .chat-main.d-flex.flex-column.flex-grow-1
 
         .toolbar.d-flex.align-items-center.px-2.py-1.border-bottom
-            span.me-2(translate) Target session:
+            span.me-2 コマンドの実行先:
             select.form-select.form-select-sm.w-auto(
+                *ngIf='targetTabs.length',
                 [(ngModel)]='targetTab',
             )
                 option(*ngFor='let tab of targetTabs', [ngValue]='tab') {{tab.title}}
-                option(*ngIf='!targetTabs.length', [ngValue]='null', disabled) No open terminal tabs
+            span.text-muted.small(*ngIf='!targetTabs.length') (端末タブを開くと選択できます。チャットでの相談だけなら不要です)
             .flex-grow-1
             button.btn.btn-link.btn-sm((click)='showMacros = !showMacros')
                 i.fas.fa-list.me-1
-                span(translate) Macros
+                span マクロ
 
-        .messages.flex-grow-1.overflow-auto.p-3
+        .messages.flex-grow-1.overflow-auto.p-3(#messagesContainer)
             .message(*ngFor='let message of messages', [ngClass]='"message-" + message.role')
                 ng-container(*ngFor='let segment of message.textSegments; let i = index')
-                    .message-text(*ngIf='segment') {{segment}}
+                    .message-text(*ngIf='segment && message.role !== "assistant"') {{segment}}
+                    .message-text(*ngIf='segment && message.role === "assistant"', [innerHTML]='formatAssistantText(segment)')
                     .command-block(*ngIf='message.blocks[i]')
-                        pre.mb-2 {{message.blocks[i].commands.join('\n')}}
-                        button.btn.btn-sm.btn-primary.me-2(
-                            *ngIf='message.blocks[i].status === "idle"',
-                            (click)='runBlock(message, message.blocks[i])',
-                            [disabled]='!targetTab',
-                        )
-                            i.fas.fa-play.me-1
-                            span(translate) Run
-                        span.text-muted(*ngIf='message.blocks[i].status === "running"')
-                            i.fas.fa-spinner.fa-spin.me-1
-                            span(translate) Running...
-                        .command-result(*ngFor='let r of message.blocks[i].results')
-                            .command-result-cmd $ {{r.command}}
-                            pre.command-result-output {{r.output}}
+                        div(*ngIf='message.blocks[i].phase === "dismissed"')
+                            span.text-muted このコマンド提案は拒否されました。
+
+                        div(*ngIf='message.blocks[i].phase !== "dismissed"')
+                            .command-block__warning(*ngIf='message.blocks[i].phase === "proposal" && dangerousCommandsOf(message.blocks[i]).length')
+                                i.fas.fa-triangle-exclamation.me-1
+                                span 破壊的・不可逆的な可能性がある操作が含まれています。内容をよく確認してください:
+                                div(*ngFor='let c of dangerousCommandsOf(message.blocks[i])')
+                                    code {{c}}
+
+                            textarea.form-control.command-block__editor(
+                                rows='4',
+                                spellcheck='false',
+                                [(ngModel)]='message.blocks[i].editedText',
+                                [disabled]='message.blocks[i].phase !== "proposal"',
+                            )
+
+                            .mt-2(*ngIf='message.blocks[i].phase === "proposal"')
+                                button.btn.btn-sm.btn-primary.me-2(
+                                    (click)='runBlock(message.blocks[i])',
+                                    [disabled]='!targetTabs.length',
+                                )
+                                    i.fas.fa-play.me-1
+                                    span 実行する
+                                button.btn.btn-sm.btn-outline-secondary((click)='dismissBlock(message.blocks[i])')
+                                    span 拒否する
+
+                            span.text-muted.mt-2.d-block(*ngIf='message.blocks[i].phase === "running"')
+                                i.fas.fa-spinner.fa-spin.me-1
+                                span 実行中...
+
+                            .command-result(*ngFor='let r of message.blocks[i].results')
+                                .command-result-cmd $ {{r.command}}
+                                pre.command-result-output {{r.output}}
+                                .command-result-timeout(*ngIf='r.timedOut')
+                                    i.fas.fa-triangle-exclamation.me-1
+                                    span 出力が止まらず待機を打ち切りました。まだ実行中の可能性があります。
 
             .message.message-assistant(*ngIf='pendingReplyText !== null')
                 .message-text {{pendingReplyText}}
@@ -40,35 +65,36 @@
         .input-bar.d-flex.p-2.border-top
             textarea.form-control.me-2(
                 rows='2',
-                placeholder='Ask about your server...',
+                placeholder='サーバーについて質問する...(Shift+Enterで改行)',
                 [(ngModel)]='input',
                 (keydown)='onInputKeydown($event)',
                 [disabled]='sending',
             )
             button.btn.btn-primary((click)='send()', [disabled]='sending || !input.trim()')
-                span(translate) Send
+                span 送信
 
     .macros-panel.border-start.p-2(*ngIf='showMacros')
-        h6(translate) Macros
+        h6 マクロ
         .macro-item.d-flex.align-items-center.mb-1(*ngFor='let macro of macros.list()')
             span.flex-grow-1 {{macro.name}}
-            button.btn.btn-sm.btn-link((click)='runMacro(macro)', [disabled]='!targetTab')
+            button.btn.btn-sm.btn-link((click)='runMacro(macro)', [disabled]='!targetTabs.length', title='実行')
                 i.fas.fa-play
-            button.btn.btn-sm.btn-link((click)='openMacroForm(macro)')
+            button.btn.btn-sm.btn-link((click)='openMacroForm(macro)', title='編集')
                 i.fas.fa-pen
-            button.btn.btn-sm.btn-link.text-danger((click)='deleteMacro(macro)')
+            button.btn.btn-sm.btn-link.text-danger((click)='deleteMacro(macro)', title='削除')
                 i.fas.fa-trash
+        p.text-muted.small(*ngIf='!macros.list().length') 保存されたマクロはありません。
 
         hr
-        h6 {{editingMacro ? 'Edit macro' : 'New macro'}}
+        h6 {{editingMacro ? 'マクロを編集' : '新しいマクロ'}}
         input.form-control.form-control-sm.mb-2(
             type='text',
-            placeholder='Macro name',
+            placeholder='マクロ名',
             [(ngModel)]='macroFormName',
         )
         textarea.form-control.form-control-sm.mb-2(
             rows='6',
-            placeholder='One command per line',
+            placeholder='コマンドを1行に1つ',
             [(ngModel)]='macroFormCommands',
         )
-        button.btn.btn-sm.btn-primary((click)='saveMacro()') Save
+        button.btn.btn-sm.btn-primary((click)='saveMacro()') 保存

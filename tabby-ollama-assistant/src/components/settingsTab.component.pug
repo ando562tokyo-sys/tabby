@@ -1,9 +1,9 @@
-h3.mb-3(translate) AI Assistant
+h3.mb-3 AIアシスタント
 
-h5(translate) Ollama connection
+h5 Ollama接続
 .form-line
     .header
-        .title(translate) Endpoint
+        .title エンドポイント
     input.form-control.w-50(
         type='text',
         placeholder='http://localhost:11434',
@@ -13,58 +13,64 @@ h5(translate) Ollama connection
 
 .form-line
     .header
-        .title(translate) Model
+        .title モデル
     .input-group.w-50
         select.form-select(
             [(ngModel)]='config.store.ollamaAssistant.model',
             (ngModelChange)='config.save()',
         )
-            option(value='') (select a model)
+            option(value='') (モデルを選択してください)
             option(*ngFor='let m of models', [value]='m') {{m}}
         button.btn.btn-outline-secondary((click)='refreshModels()', [disabled]='loadingModels')
-            span(*ngIf='!loadingModels', translate) Fetch models
-            span(*ngIf='loadingModels', translate) Loading...
+            span(*ngIf='!loadingModels') モデル一覧を取得
+            span(*ngIf='loadingModels') 読み込み中...
 
 .form-line
     .header
-        .title(translate) System prompt
+        .title システムプロンプト(LLMとのやり取りで常に先頭に付与される指示文)
     textarea.form-control(
         rows='10',
+        spellcheck='false',
         [(ngModel)]='config.store.ollamaAssistant.systemPrompt',
         (ngModelChange)='config.save()',
     )
     button.btn.btn-outline-secondary.mt-2((click)='resetSystemPrompt()')
-        span(translate) Reset to default
+        span 既定のプロンプトに戻す
 
 hr
 
-h5(translate) SSH key generation
+h5 SSH鍵の生成
+p.text-muted.small
+    | RSA 4096bitの鍵ペアを生成します。公開鍵はサーバー側の
+    code ~/.ssh/authorized_keys
+    |  に追記し、秘密鍵は各SSHプロファイルの秘密鍵欄に貼り付けて使用してください。
+
 .form-line
     .header
-        .title(translate) Comment (appended to the public key)
+        .title コメント(公開鍵の末尾に付与されます。任意)
     input.form-control.w-50(
         type='text',
         placeholder='user@host',
         [(ngModel)]='keygenComment',
     )
 button.btn.btn-primary.mb-3((click)='generateKeyPair()')
-    span(translate) Generate RSA 4096 key pair
+    span RSA 4096bitの鍵ペアを生成
 
 div(*ngIf='generatedPrivateKey')
     .form-line
         .header
-            .title(translate) Private key (PEM)
+            .title 秘密鍵(PEM形式。第三者に渡さないでください)
         textarea.form-control(rows='10', readonly, [value]='generatedPrivateKey')
         .mt-1
             button.btn.btn-sm.btn-outline-secondary.me-2((click)='savePrivateKey()')
-                span(translate) Save to file...
+                span ファイルに保存...
             button.btn.btn-sm.btn-outline-secondary((click)='copyToClipboard(generatedPrivateKey)')
-                span(translate) Copy
+                span コピー
 
     .form-line
         .header
-            .title(translate) Public key
+            .title 公開鍵(サーバー側のauthorized_keysに追記してください)
         textarea.form-control(rows='3', readonly, [value]='generatedPublicKey')
         .mt-1
             button.btn.btn-sm.btn-outline-secondary((click)='copyToClipboard(generatedPublicKey)')
-                span(translate) Copy
+                span コピー

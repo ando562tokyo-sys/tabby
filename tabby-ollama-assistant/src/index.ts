@@ -2,7 +2,7 @@ import { NgModule } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 
-import TabbyCorePlugin, { ToolbarButtonProvider, ConfigProvider } from 'tabby-core'
+import TabbyCorePlugin, { ToolbarButtonProvider, ConfigProvider, TabRecoveryProvider } from 'tabby-core'
 import { SettingsTabProvider } from 'tabby-settings'
 
 import { OllamaChatTabComponent } from './components/chatTab.component'
@@ -11,6 +11,7 @@ import { OllamaAssistantButtonProvider } from './buttonProvider'
 import { LoggingButtonProvider } from './loggingButtonProvider'
 import { OllamaAssistantSettingsTabProvider } from './settings'
 import { OllamaAssistantConfigProvider } from './config'
+import { ChatRecoveryProvider } from './recoveryProvider'
 
 @NgModule({
     imports: [
@@ -27,6 +28,7 @@ import { OllamaAssistantConfigProvider } from './config'
         { provide: ToolbarButtonProvider, useClass: LoggingButtonProvider, multi: true },
         { provide: SettingsTabProvider, useClass: OllamaAssistantSettingsTabProvider, multi: true },
         { provide: ConfigProvider, useClass: OllamaAssistantConfigProvider, multi: true },
+        { provide: TabRecoveryProvider, useClass: ChatRecoveryProvider, multi: true },
     ],
 })
 export default class OllamaAssistantModule { } // eslint-disable-line @typescript-eslint/no-extraneous-class

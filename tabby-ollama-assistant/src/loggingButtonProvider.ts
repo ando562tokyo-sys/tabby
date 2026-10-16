@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core'
-import { ToolbarButtonProvider, ToolbarButton, AppService, TranslateService, NotificationsService } from 'tabby-core'
+import { ToolbarButtonProvider, ToolbarButton, AppService, NotificationsService } from 'tabby-core'
 import { BaseTerminalTabComponent } from 'tabby-terminal'
 
 import { LoggingService } from './services/logging.service'
@@ -11,7 +11,6 @@ export class LoggingButtonProvider extends ToolbarButtonProvider {
         private app: AppService,
         private logging: LoggingService,
         private notifications: NotificationsService,
-        private translate: TranslateService,
     ) {
         super()
     }
@@ -21,7 +20,7 @@ export class LoggingButtonProvider extends ToolbarButtonProvider {
         const logging = tab?.session ? this.logging.isLogging(tab.session) : false
         return [{
             icon: require('./icons/log.svg'),
-            title: this.translate.instant(logging ? 'Stop session logging' : 'Start session logging'),
+            title: logging ? 'セッションログの保存を停止' : 'セッションログの保存を開始',
             weight: 6,
             click: (): void => this.toggle(),
         }]
@@ -34,15 +33,15 @@ export class LoggingButtonProvider extends ToolbarButtonProvider {
     private toggle (): void {
         const tab = this.activeTerminalTab
         if (!tab?.session) {
-            this.notifications.error('Focus a terminal tab first.')
+            this.notifications.error('ログを保存する端末タブを選択してください。')
             return
         }
         if (this.logging.isLogging(tab.session)) {
             this.logging.stop(tab.session)
-            this.notifications.info('Session logging stopped.')
+            this.notifications.info('セッションログの保存を停止しました。')
         } else {
             const logPath = this.logging.start(tab.session, tab.title)
-            this.notifications.info(`Logging to ${logPath}`)
+            this.notifications.info(`ログを保存しています: ${logPath}`)
         }
     }
 }

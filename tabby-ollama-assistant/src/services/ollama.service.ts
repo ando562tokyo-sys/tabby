@@ -22,7 +22,7 @@ export class OllamaService {
         const endpoint = normalizeEndpoint(this.settings.endpoint)
         const response = await fetch(`${endpoint}/api/tags`)
         if (!response.ok) {
-            throw new Error(`Ollama returned HTTP ${response.status}`)
+            throw new Error(`Ollamaからエラーが返されました (HTTP ${response.status})`)
         }
         const data = await response.json()
         return (data.models ?? []).map((m: any) => m.name)
@@ -35,10 +35,10 @@ export class OllamaService {
     async chat (messages: ChatMessage[], onChunk: (text: string) => void): Promise<string> {
         const endpoint = normalizeEndpoint(this.settings.endpoint)
         if (!endpoint) {
-            throw new Error('Ollama endpoint is not configured.')
+            throw new Error('Ollamaのエンドポイントが設定されていません。設定画面で指定してください。')
         }
         if (!this.settings.model) {
-            throw new Error('No Ollama model selected in Settings.')
+            throw new Error('Ollamaのモデルが選択されていません。設定画面で選択してください。')
         }
 
         const allMessages: ChatMessage[] = this.settings.systemPrompt
@@ -56,7 +56,7 @@ export class OllamaService {
         })
 
         if (!response.ok || !response.body) {
-            throw new Error(`Ollama returned HTTP ${response.status}`)
+            throw new Error(`Ollamaからエラーが返されました (HTTP ${response.status})`)
         }
 
         const reader = response.body.getReader()

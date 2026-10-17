@@ -1,8 +1,9 @@
 import { Component } from '@angular/core'
-import { ConfigService, NotificationsService, PlatformService } from 'tabby-core'
+import { ConfigService, NotificationsService, PlatformService, Profile, ProfilesService } from 'tabby-core'
 
 import { OllamaService } from '../services/ollama.service'
 import { KeygenService } from '../services/keygen.service'
+import { ServerNotesService } from '../services/serverNotes.service'
 import { DEFAULT_SYSTEM_PROMPT } from '../config'
 
 @Component({
@@ -16,13 +17,36 @@ export class OllamaSettingsTabComponent {
     generatedPrivateKey = ''
     generatedPublicKey = ''
 
+    sshProfiles: Profile[] = []
+    selectedProfileId = ''
+    noteText = ''
+
     constructor (
         public config: ConfigService,
         private ollama: OllamaService,
         private keygen: KeygenService,
         private notifications: NotificationsService,
         private platform: PlatformService,
+        private profiles: ProfilesService,
+        private serverNotes: ServerNotesService,
     ) { }
+
+    async ngOnInit (): Promise<void> {
+        const all = await this.profiles.getProfiles()
+        this.sshProfiles = all.filter(p => p.type === 'ssh') as Profile[]
+    }
+
+    onProfileSelected (): void {
+        this.noteText = this.selectedProfileId ? this.serverNotes.get(this.selectedProfileId) : ''
+    }
+
+    saveNote (): void {
+        if (!this.selectedProfileId) {
+            return
+        }
+        this.serverNotes.set(this.selectedProfileId, this.noteText)
+        this.notifications.info('メモを保存しました。')
+    }
 
     async refreshModels (): Promise<void> {
         this.loadingModels = true

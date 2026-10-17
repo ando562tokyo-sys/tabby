@@ -11,6 +11,7 @@ import { FileTransferTabComponent } from './components/fileTransferTab.component
 import { OllamaAssistantButtonProvider } from './buttonProvider'
 import { LoggingButtonProvider } from './loggingButtonProvider'
 import { FileTransferButtonProvider } from './fileTransferButtonProvider'
+import { BroadcastButtonProvider } from './broadcastButtonProvider'
 import { OllamaAssistantSettingsTabProvider } from './settings'
 import { OllamaAssistantConfigProvider } from './config'
 import { ChatRecoveryProvider } from './recoveryProvider'
@@ -30,6 +31,7 @@ import { ChatRecoveryProvider } from './recoveryProvider'
         { provide: ToolbarButtonProvider, useClass: OllamaAssistantButtonProvider, multi: true },
         { provide: ToolbarButtonProvider, useClass: LoggingButtonProvider, multi: true },
         { provide: ToolbarButtonProvider, useClass: FileTransferButtonProvider, multi: true },
+        { provide: ToolbarButtonProvider, useClass: BroadcastButtonProvider, multi: true },
         { provide: SettingsTabProvider, useClass: OllamaAssistantSettingsTabProvider, multi: true },
         { provide: ConfigProvider, useClass: OllamaAssistantConfigProvider, multi: true },
         { provide: TabRecoveryProvider, useClass: ChatRecoveryProvider, multi: true },

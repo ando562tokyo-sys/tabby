@@ -9,10 +9,20 @@
             )
                 option(*ngFor='let tab of targetTabs', [ngValue]='tab') {{tab.title}}
             span.text-muted.small(*ngIf='!targetTabs.length') (端末タブを開くと選択できます。チャットでの相談だけなら不要です)
+            button.btn.btn-link.btn-sm((click)='toggleNotes()', *ngIf='targetProfile', title='サーバーメモ')
+                i.fas.fa-note-sticky
             .flex-grow-1
             button.btn.btn-link.btn-sm((click)='showMacros = !showMacros')
                 i.fas.fa-list.me-1
                 span マクロ
+
+        .notes-box.px-2.py-1.border-bottom(*ngIf='notesOpen && targetProfile')
+            textarea.form-control.form-control-sm(
+                rows='3',
+                placeholder='このサーバーについてのメモ(用途、よく使うコマンドなど)',
+                [(ngModel)]='noteDraft',
+                (ngModelChange)='saveNoteDraft()',
+            )
 
         .messages.flex-grow-1.overflow-auto.p-3(#messagesContainer)
             .message(*ngFor='let message of messages', [ngClass]='"message-" + message.role')
@@ -82,9 +92,24 @@
 
     .macros-panel.border-start.p-2(*ngIf='showMacros')
         h6 マクロ
+
+        .form-check.mb-2
+            input.form-check-input(type='checkbox', id='multiServerModeCheck', [(ngModel)]='multiServerMode')
+            label.form-check-label.small(for='multiServerModeCheck') 複数サーバーに同時実行する
+
+        .multi-server-targets.mb-2(*ngIf='multiServerMode')
+            p.text-muted.small.mb-1(*ngIf='!targetTabs.length') 開いている端末タブがありません。
+            .form-check(*ngFor='let tab of targetTabs')
+                input.form-check-input(
+                    type='checkbox',
+                    [checked]='isMultiServerTarget(tab)',
+                    (change)='toggleMultiServerTarget(tab)',
+                )
+                label.form-check-label.small {{tab.title}}
+
         .macro-item.d-flex.align-items-center.mb-1(*ngFor='let macro of macros.list()')
             span.flex-grow-1 {{macro.name}}
-            button.btn.btn-sm.btn-link((click)='runMacro(macro)', [disabled]='!targetTabs.length', title='実行')
+            button.btn.btn-sm.btn-link((click)='runMacro(macro)', [disabled]='!canRunMacro', title='実行')
                 i.fas.fa-play
             button.btn.btn-sm.btn-link((click)='openMacroForm(macro)', title='編集')
                 i.fas.fa-pen

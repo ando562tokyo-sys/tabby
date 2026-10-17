@@ -11,6 +11,16 @@
         span.text-muted.small.ms-2(*ngIf='connecting')
             i.fas.fa-spinner.fa-spin.me-1
             span 接続中...
+        button.btn.btn-link.btn-sm((click)='toggleNotes()', *ngIf='targetProfile', title='サーバーメモ')
+            i.fas.fa-note-sticky
+
+    .notes-box.px-2.py-1.border-bottom(*ngIf='notesOpen && targetProfile')
+        textarea.form-control.form-control-sm(
+            rows='3',
+            placeholder='このサーバーについてのメモ(用途、よく使うコマンドなど)',
+            [(ngModel)]='noteDraft',
+            (ngModelChange)='saveNoteDraft()',
+        )
 
     .panes.d-flex.flex-grow-1.overflow-hidden
         .pane.d-flex.flex-column

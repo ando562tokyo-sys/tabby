@@ -1,9 +1,11 @@
 import { Component, ElementRef, Injector, Input, ViewChild } from '@angular/core'
-import { AppService, BaseTabComponent, GetRecoveryTokenOptions, NotificationsService, RecoveryToken } from 'tabby-core'
-import { BaseTerminalTabComponent } from 'tabby-terminal'
+import { AppService, BaseTabComponent, GetRecoveryTokenOptions, NotificationsService, Profile, RecoveryToken } from 'tabby-core'
+import { BaseSession, BaseTerminalTabComponent } from 'tabby-terminal'
+import { SSHTabComponent } from 'tabby-ssh'
 
 import { OllamaService, ChatMessage } from '../services/ollama.service'
 import { MacrosService, waitForSessionIdle } from '../services/macros.service'
+import { ServerNotesService } from '../services/serverNotes.service'
 import { OllamaAssistantMacro } from '../config'
 import { isDangerousCommand } from '../dangerousCommands'
 import { formatAssistantText } from '../textFormatting'
@@ -74,6 +76,11 @@ export class OllamaChatTabComponent extends BaseTabComponent {
     editingMacro: OllamaAssistantMacro | null = null
     macroFormName = ''
     macroFormCommands = ''
+    multiServerMode = false
+    multiServerTargets = new Set<BaseTerminalTabComponent<any>>()
+
+    notesOpen = false
+    noteDraft = ''
 
     @ViewChild('messagesContainer') private messagesContainer?: ElementRef<HTMLElement>
 
@@ -83,6 +90,7 @@ export class OllamaChatTabComponent extends BaseTabComponent {
         private ollama: OllamaService,
         public macros: MacrosService,
         private notifications: NotificationsService,
+        private serverNotes: ServerNotesService,
     ) {
         super(injector)
         this.setTitle('AIアシスタント')
@@ -92,6 +100,24 @@ export class OllamaChatTabComponent extends BaseTabComponent {
         return this.app.tabs.filter(
             (t): t is BaseTerminalTabComponent<any> => t instanceof BaseTerminalTabComponent && !!(t as any).session,
         )
+    }
+
+    /** Only SSH tabs carry a saved profile that notes can be attached to. */
+    get targetProfile (): Profile | null {
+        return this.targetTab instanceof SSHTabComponent ? this.targetTab.profile : null
+    }
+
+    toggleNotes (): void {
+        this.notesOpen = !this.notesOpen
+        if (this.notesOpen) {
+            this.noteDraft = this.targetProfile ? this.serverNotes.get(this.targetProfile.id) : ''
+        }
+    }
+
+    saveNoteDraft (): void {
+        if (this.targetProfile) {
+            this.serverNotes.set(this.targetProfile.id, this.noteDraft)
+        }
     }
 
     ngOnInit (): void {
@@ -277,7 +303,27 @@ export class OllamaChatTabComponent extends BaseTabComponent {
         this.macros.delete(macro.id)
     }
 
+    get canRunMacro (): boolean {
+        return this.multiServerMode ? this.multiServerTargets.size > 0 : this.targetTabs.length > 0
+    }
+
+    isMultiServerTarget (tab: BaseTerminalTabComponent<any>): boolean {
+        return this.multiServerTargets.has(tab)
+    }
+
+    toggleMultiServerTarget (tab: BaseTerminalTabComponent<any>): void {
+        if (this.multiServerTargets.has(tab)) {
+            this.multiServerTargets.delete(tab)
+        } else {
+            this.multiServerTargets.add(tab)
+        }
+    }
+
     async runMacro (macro: OllamaAssistantMacro): Promise<void> {
+        if (this.multiServerMode) {
+            await this.runMacroOnSelectedServers(macro)
+            return
+        }
         const session = this.resolveTargetSession()
         if (!session) {
             return
@@ -294,5 +340,63 @@ export class OllamaChatTabComponent extends BaseTabComponent {
             this.scrollToBottom()
         })
         this.shareResultsWithChat(results)
+    }
+
+    private async runMacroOnSelectedServers (macro: OllamaAssistantMacro): Promise<void> {
+        const tabs = [...this.multiServerTargets].filter(t => this.targetTabs.includes(t) && !!t.session)
+        if (tabs.length === 0) {
+            this.notifications.error('マクロを実行するサーバーを選択してください。')
+            return
+        }
+
+        const resultsByTab = new Map<BaseTerminalTabComponent<any>, { command: string, output: string, timedOut: boolean }[]>()
+        const sessionToTab = new Map<BaseSession, BaseTerminalTabComponent<any>>()
+        for (const tab of tabs) {
+            resultsByTab.set(tab, [])
+            sessionToTab.set(tab.session!, tab)
+        }
+
+        this.messages.push({
+            role: 'system',
+            textSegments: [`マクロ「${macro.name}」を${tabs.length}台のサーバーに同時実行しています...`],
+            blocks: [],
+        })
+        this.scrollToBottom()
+
+        await this.macros.runOnMultiple(macro.commands, tabs.map(t => t.session!), (session, result) => {
+            const tab = sessionToTab.get(session)
+            if (tab) {
+                resultsByTab.get(tab)?.push(result)
+            }
+            this.scrollToBottom()
+        })
+
+        this.shareMultiServerResultsWithChat(resultsByTab)
+    }
+
+    private shareMultiServerResultsWithChat (
+        resultsByTab: Map<BaseTerminalTabComponent<any>, { command: string, output: string, timedOut: boolean }[]>,
+    ): void {
+        const sections = [...resultsByTab.entries()].map(([tab, results]) => {
+            const body = results
+                .map(r => {
+                    let line = `$ ${r.command}\n${r.output.trim()}`
+                    if (r.timedOut) {
+                        line += '\n(出力が一定時間止まらなかったため待機を打ち切りました。コマンドがまだ実行中の可能性があります)'
+                    }
+                    return line
+                })
+                .join('\n\n')
+            return `[${tab.title}]\n${body}`
+        }).join('\n\n')
+
+        const text = `[複数サーバーでのコマンド実行結果]\n${sections}`
+        this.history.push({ role: 'user', content: text })
+        this.messages.push({
+            role: 'system',
+            textSegments: [`${resultsByTab.size}台のサーバーでマクロを実行しました。結果について質問できます。`],
+            blocks: [],
+        })
+        this.scrollToBottom()
     }
 }

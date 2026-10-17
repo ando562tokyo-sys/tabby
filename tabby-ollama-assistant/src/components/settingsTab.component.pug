@@ -74,3 +74,25 @@ div(*ngIf='generatedPrivateKey')
         .mt-1
             button.btn.btn-sm.btn-outline-secondary((click)='copyToClipboard(generatedPublicKey)')
                 span コピー
+
+hr
+
+h5 サーバーメモ
+p.text-muted.small 各SSHサーバーに簡単なメモ(用途、よく使うコマンドなど)を残せます。チャット画面などには表示されず、ここでのみ確認・編集します。
+
+.form-line
+    .header
+        .title サーバーを選択
+    select.form-select.w-50(
+        [(ngModel)]='selectedProfileId',
+        (ngModelChange)='onProfileSelected()',
+    )
+        option(value='') (選択してください)
+        option(*ngFor='let p of sshProfiles', [value]='p.id') {{p.name}}
+
+.form-line(*ngIf='selectedProfileId')
+    .header
+        .title メモ
+    textarea.form-control(rows='6', [(ngModel)]='noteText')
+    button.btn.btn-outline-secondary.mt-2((click)='saveNote()')
+        span 保存

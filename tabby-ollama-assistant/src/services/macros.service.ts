@@ -86,4 +86,17 @@ export class MacrosService {
             onCommandOutput({ command, output, timedOut })
         }
     }
+
+    /**
+     * Runs the same command sequence against several sessions at once (one server's
+     * commands don't wait on another's), for applying the same macro to a fleet of
+     * servers in one click.
+     */
+    async runOnMultiple (
+        commands: string[],
+        sessions: BaseSession[],
+        onCommandOutput: (session: BaseSession, result: MacroRunResult) => void,
+    ): Promise<void> {
+        await Promise.all(sessions.map(session => this.run(commands, session, result => onCommandOutput(session, result))))
+    }
 }

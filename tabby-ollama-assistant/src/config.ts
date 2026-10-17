@@ -27,6 +27,8 @@ export interface OllamaAssistantConfig {
     model: string
     systemPrompt: string
     macros: OllamaAssistantMacro[]
+    /** サーバー(SSHプロファイル)のid -> メモ本文 */
+    serverNotes: Record<string, string>
 }
 
 /** @hidden */
@@ -37,6 +39,7 @@ export class OllamaAssistantConfigProvider extends ConfigProvider {
             model: '',
             systemPrompt: DEFAULT_SYSTEM_PROMPT,
             macros: [],
+            serverNotes: {},
         },
     }
 

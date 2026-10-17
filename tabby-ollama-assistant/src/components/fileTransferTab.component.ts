@@ -1,9 +1,10 @@
 import * as path from 'path'
 import { Component, Injector } from '@angular/core'
-import { AppService, BaseTabComponent, NotificationsService } from 'tabby-core'
+import { AppService, BaseTabComponent, NotificationsService, Profile } from 'tabby-core'
 import { SFTPFile, SFTPSession, SSHTabComponent } from 'tabby-ssh'
 
 import { LocalFile, LocalFilesService } from '../services/localFiles.service'
+import { ServerNotesService } from '../services/serverNotes.service'
 import { LocalFileDownload, LocalFileUpload } from '../localFileTransfer'
 
 interface TransferProgress {
@@ -38,11 +39,15 @@ export class FileTransferTabComponent extends BaseTabComponent {
     transfers: TransferProgress[] = []
     private nextTransferId = 1
 
+    notesOpen = false
+    noteDraft = ''
+
     constructor (
         injector: Injector,
         private app: AppService,
         private localFiles: LocalFilesService,
         private notifications: NotificationsService,
+        private serverNotes: ServerNotesService,
     ) {
         super(injector)
         this.setTitle('ファイル転送')
@@ -50,6 +55,23 @@ export class FileTransferTabComponent extends BaseTabComponent {
 
     get targetTabs (): SSHTabComponent[] {
         return this.app.tabs.filter((t): t is SSHTabComponent => t instanceof SSHTabComponent && !!t.sshSession)
+    }
+
+    get targetProfile (): Profile | null {
+        return this.targetTab?.profile ?? null
+    }
+
+    toggleNotes (): void {
+        this.notesOpen = !this.notesOpen
+        if (this.notesOpen) {
+            this.noteDraft = this.targetProfile ? this.serverNotes.get(this.targetProfile.id) : ''
+        }
+    }
+
+    saveNoteDraft (): void {
+        if (this.targetProfile) {
+            this.serverNotes.set(this.targetProfile.id, this.noteDraft)
+        }
     }
 
     async ngOnInit (): Promise<void> {

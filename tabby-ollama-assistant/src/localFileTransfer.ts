@@ -2,6 +2,8 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import { FileDownload, FileUpload } from 'tabby-core'
 
+import { wrapFsError } from './fsErrors'
+
 /**
  * Minimal Node `fs`-backed implementations of Tabby's FileUpload/FileDownload so a
  * specific local path (picked in our own local pane, not via a save/open dialog) can
@@ -19,11 +21,15 @@ export class LocalFileUpload extends FileUpload {
     }
 
     async open (): Promise<void> {
-        const stat = await fs.stat(this.filePath)
-        this.size = stat.size
-        this.mode = stat.mode
-        this.setTotalSize(this.size)
-        this.file = await fs.open(this.filePath, 'r')
+        try {
+            const stat = await fs.stat(this.filePath)
+            this.size = stat.size
+            this.mode = stat.mode
+            this.setTotalSize(this.size)
+            this.file = await fs.open(this.filePath, 'r')
+        } catch (error) {
+            throw wrapFsError('アップロード', this.filePath, error)
+        }
     }
 
     getName (): string {
@@ -39,12 +45,16 @@ export class LocalFileUpload extends FileUpload {
     }
 
     async read (): Promise<Uint8Array> {
-        const result = await this.file.read(this.buffer, 0, this.buffer.length, null)
-        this.increaseProgress(result.bytesRead)
-        if (this.getCompletedBytes() >= this.getSize()) {
-            this.setCompleted(true)
+        try {
+            const result = await this.file.read(this.buffer, 0, this.buffer.length, null)
+            this.increaseProgress(result.bytesRead)
+            if (this.getCompletedBytes() >= this.getSize()) {
+                this.setCompleted(true)
+            }
+            return this.buffer.slice(0, result.bytesRead)
+        } catch (error) {
+            throw wrapFsError('アップロード', this.filePath, error)
         }
-        return this.buffer.slice(0, result.bytesRead)
     }
 
     close (): void {
@@ -61,7 +71,11 @@ export class LocalFileDownload extends FileDownload {
     }
 
     async open (): Promise<void> {
-        this.file = await fs.open(this.filePath, 'w', this.mode || 0o644)
+        try {
+            this.file = await fs.open(this.filePath, 'w', this.mode || 0o644)
+        } catch (error) {
+            throw wrapFsError('ダウンロード', this.filePath, error)
+        }
     }
 
     getName (): string {
@@ -73,14 +87,18 @@ export class LocalFileDownload extends FileDownload {
     }
 
     async write (buffer: Uint8Array): Promise<void> {
-        let pos = 0
-        while (pos < buffer.length) {
-            const result = await this.file.write(buffer, pos, buffer.length - pos, null)
-            this.increaseProgress(result.bytesWritten)
-            pos += result.bytesWritten
-        }
-        if (this.getCompletedBytes() >= this.getSize()) {
-            this.setCompleted(true)
+        try {
+            let pos = 0
+            while (pos < buffer.length) {
+                const result = await this.file.write(buffer, pos, buffer.length - pos, null)
+                this.increaseProgress(result.bytesWritten)
+                pos += result.bytesWritten
+            }
+            if (this.getCompletedBytes() >= this.getSize()) {
+                this.setCompleted(true)
+            }
+        } catch (error) {
+            throw wrapFsError('ダウンロード', this.filePath, error)
         }
     }
 

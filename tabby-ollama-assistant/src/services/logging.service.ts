@@ -33,7 +33,11 @@ export class LoggingService {
         const safeLabel = (label || 'session').replace(/[\\/:*?"<>|]/g, '_')
         const logPath = path.join(dir, `${safeLabel}_${timestamp}.log`)
         const stream = fs.createWriteStream(logPath, { flags: 'a' })
-        const subscription = session.binaryOutput$.subscribe(data => stream.write(data))
+        const subscription = new Subscription()
+        subscription.add(session.binaryOutput$.subscribe(data => stream.write(data)))
+        // 「停止」を押さずに端末タブを閉じても、ファイルハンドルとMapの参照が残り続け
+        // リークしないよう、セッション破棄時に自動で後始末する。
+        subscription.add(session.destroyed$.subscribe(() => this.stop(session)))
         this.activeLogs.set(session, { stream, path: logPath, subscription })
         return logPath
     }

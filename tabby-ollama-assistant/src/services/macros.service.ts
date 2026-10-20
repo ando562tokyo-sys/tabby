@@ -13,8 +13,15 @@ function generateId (): string {
  * regardless, as a safety net for commands that never produce a recognizable prompt.
  * The resolved value is `true` if it was cut off by `maxMs` rather than going idle
  * normally, meaning the command may still be running on the server.
+ *
+ * Known limitation: this is a timing heuristic, not a real "command finished" signal
+ * (SSH has no generic way to know that without a shell-specific prompt/marker
+ * protocol). A command whose own output pauses for longer than `idleMs` mid-run (e.g.
+ * a slow progress indicator) can be mistaken for finished, and the next command in a
+ * macro would then be sent while it's still running. `idleMs` is set generously to
+ * make this rare for typical sysadmin commands, but it is not eliminated.
  */
-export function waitForSessionIdle (session: BaseSession, idleMs = 400, maxMs = 15000): Promise<boolean> {
+export function waitForSessionIdle (session: BaseSession, idleMs = 800, maxMs = 20000): Promise<boolean> {
     return new Promise(resolve => {
         let idleTimer: ReturnType<typeof setTimeout> | undefined = undefined
         let sub: { unsubscribe: () => void } | undefined = undefined
@@ -70,7 +77,10 @@ export class MacrosService {
     /**
      * Runs a macro's commands in order against an already-open terminal session,
      * typing each command as if the user had entered it and waiting for the
-     * session's output to go quiet before sending the next one.
+     * session's output to go quiet before sending the next one. A command that
+     * errors out (e.g. the session was disconnected mid-run) is reported as a
+     * result rather than thrown, and stops the remaining commands in this session
+     * only - it never propagates to abort other sessions in runOnMultiple.
      */
     async run (
         commands: string[],
@@ -79,24 +89,37 @@ export class MacrosService {
     ): Promise<void> {
         for (const command of commands) {
             let output = ''
-            const sub = session.output$.subscribe(chunk => { output += chunk })
-            session.feedFromTerminal(Buffer.from(command + '\n'))
-            const timedOut = await waitForSessionIdle(session)
-            sub.unsubscribe()
-            onCommandOutput({ command, output, timedOut })
+            let sub: { unsubscribe: () => void } | undefined = undefined
+            try {
+                sub = session.output$.subscribe(chunk => { output += chunk })
+                session.feedFromTerminal(Buffer.from(command + '\n'))
+                const timedOut = await waitForSessionIdle(session)
+                onCommandOutput({ command, output, timedOut })
+            } catch (error) {
+                onCommandOutput({
+                    command,
+                    output: `${output}\n[エラー] ${error.message ?? String(error)}`,
+                    timedOut: false,
+                })
+                break
+            } finally {
+                sub?.unsubscribe()
+            }
         }
     }
 
     /**
      * Runs the same command sequence against several sessions at once (one server's
      * commands don't wait on another's), for applying the same macro to a fleet of
-     * servers in one click.
+     * servers in one click. Uses allSettled (on top of run()'s own per-command error
+     * handling) so a problem on one server can never swallow the results already
+     * captured from the others.
      */
     async runOnMultiple (
         commands: string[],
         sessions: BaseSession[],
         onCommandOutput: (session: BaseSession, result: MacroRunResult) => void,
     ): Promise<void> {
-        await Promise.all(sessions.map(session => this.run(commands, session, result => onCommandOutput(session, result))))
+        await Promise.allSettled(sessions.map(session => this.run(commands, session, result => onCommandOutput(session, result))))
     }
 }

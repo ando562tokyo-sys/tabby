@@ -4,7 +4,7 @@ import { BaseSession, BaseTerminalTabComponent } from 'tabby-terminal'
 import { SSHTabComponent } from 'tabby-ssh'
 
 import { OllamaService, ChatMessage } from '../services/ollama.service'
-import { MacrosService, waitForSessionIdle } from '../services/macros.service'
+import { MacroRunResult, MacrosService, waitForSessionIdle } from '../services/macros.service'
 import { ServerNotesService } from '../services/serverNotes.service'
 import { OllamaAssistantMacro } from '../config'
 import { isDangerousCommand } from '../dangerousCommands'
@@ -14,7 +14,7 @@ export interface CommandBlock {
     /** Editable text shown in the textarea; split into individual commands when run. */
     editedText: string
     phase: 'proposal' | 'running' | 'done' | 'dismissed'
-    results: { command: string, output: string, timedOut: boolean }[]
+    results: MacroRunResult[]
 }
 
 export interface DisplayMessage {
@@ -27,6 +27,23 @@ export interface DisplayMessage {
 }
 
 const COMMAND_BLOCK_RE = /```(?:bash|sh)?\n([\s\S]*?)```/g
+
+// 長時間の運用で復元トークン(ディスク保存)やOllamaへの送信payloadが肥大化しないよう、
+// 会話履歴とAIに送る1コマンドあたりの出力量に上限を設ける。
+const MAX_MESSAGES = 60
+const MAX_HISTORY = 30
+const MAX_OUTPUT_CHARS_FOR_AI = 2000
+
+function trimmedTo<T> (arr: T[], max: number): T[] {
+    return arr.length > max ? arr.slice(arr.length - max) : arr
+}
+
+function truncateForAi (text: string, maxLength = MAX_OUTPUT_CHARS_FOR_AI): string {
+    if (text.length <= maxLength) {
+        return text
+    }
+    return `${text.slice(0, maxLength)}\n...(以下省略、合計${text.length}文字)`
+}
 
 /**
  * Splits text into alternating plain-text segments and ```bash/```sh command
@@ -69,6 +86,7 @@ export class OllamaChatTabComponent extends BaseTabComponent {
     history: ChatMessage[] = []
     input = ''
     sending = false
+    executing = false
     pendingReplyText: string | null = null
     targetTab: BaseTerminalTabComponent<any> | null = null
 
@@ -121,11 +139,19 @@ export class OllamaChatTabComponent extends BaseTabComponent {
     }
 
     ngOnInit (): void {
-        this.messages = this.savedMessages.length ? this.savedMessages : []
-        this.history = this.savedHistory.length ? this.savedHistory : []
+        this.messages = trimmedTo(this.savedMessages, MAX_MESSAGES)
+        this.history = trimmedTo(this.savedHistory, MAX_HISTORY)
         if (!this.targetTab) {
             this.targetTab = this.targetTabs[0] ?? null
         }
+    }
+
+    private pushMessage (message: DisplayMessage): void {
+        this.messages = trimmedTo([...this.messages, message], MAX_MESSAGES)
+    }
+
+    private pushHistory (entry: ChatMessage): void {
+        this.history = trimmedTo([...this.history, entry], MAX_HISTORY)
     }
 
     async getRecoveryToken (options?: GetRecoveryTokenOptions): Promise<RecoveryToken | null> {
@@ -169,14 +195,14 @@ export class OllamaChatTabComponent extends BaseTabComponent {
         }
         this.input = ''
         const parsedInput = parseMessage(text, 'user')
-        this.messages.push(parsedInput)
-        this.history.push({ role: 'user', content: text })
+        this.pushMessage(parsedInput)
+        this.pushHistory({ role: 'user', content: text })
         this.scrollToBottom()
 
         if (parsedInput.blocks.length > 0) {
             // 他所でAIに相談して得たコマンド入りの指示をそのまま貼り付けた場合は、
             // Ollamaに聞き直さずそのままコマンド候補として表示する。
-            this.messages.push({
+            this.pushMessage({
                 role: 'system',
                 textSegments: ['コードブロックを検出したため、AIには送らずコマンドの候補として表示しました。'],
                 blocks: [],
@@ -202,8 +228,8 @@ export class OllamaChatTabComponent extends BaseTabComponent {
                 this.pendingReplyText += chunk
                 this.scrollToBottom()
             })
-            this.history.push({ role: 'assistant', content: full })
-            this.messages.push(parseMessage(full, 'assistant'))
+            this.pushHistory({ role: 'assistant', content: full })
+            this.pushMessage(parseMessage(full, 'assistant'))
         } catch (error) {
             this.notifications.error(error.message ?? String(error))
         } finally {
@@ -232,30 +258,39 @@ export class OllamaChatTabComponent extends BaseTabComponent {
     }
 
     async runBlock (block: CommandBlock): Promise<void> {
+        if (this.executing) {
+            this.notifications.error('他のコマンドを実行中です。完了するまでお待ちください。')
+            return
+        }
         const session = this.resolveTargetSession()
         if (!session) {
             return
         }
-        const commands = commandsOf(block)
-        block.phase = 'running'
-        block.results = []
-        for (const command of commands) {
-            let output = ''
-            const sub = session.output$.subscribe(chunk => { output += chunk })
-            session.feedFromTerminal(Buffer.from(command + '\n'))
-            const timedOut = await waitForSessionIdle(session)
-            sub.unsubscribe()
-            block.results.push({ command, output, timedOut })
-            this.scrollToBottom()
+        this.executing = true
+        try {
+            const commands = commandsOf(block)
+            block.phase = 'running'
+            block.results = []
+            for (const command of commands) {
+                let output = ''
+                const sub = session.output$.subscribe(chunk => { output += chunk })
+                session.feedFromTerminal(Buffer.from(command + '\n'))
+                const timedOut = await waitForSessionIdle(session)
+                sub.unsubscribe()
+                block.results.push({ command, output, timedOut })
+                this.scrollToBottom()
+            }
+            block.phase = 'done'
+            this.shareResultsWithChat(block.results)
+        } finally {
+            this.executing = false
         }
-        block.phase = 'done'
-        this.shareResultsWithChat(block.results)
     }
 
-    private shareResultsWithChat (results: { command: string, output: string, timedOut: boolean }[]): void {
+    private shareResultsWithChat (results: MacroRunResult[]): void {
         const summary = results
             .map(r => {
-                let line = `$ ${r.command}\n${r.output.trim()}`
+                let line = `$ ${r.command}\n${truncateForAi(r.output.trim())}`
                 if (r.timedOut) {
                     line += '\n(出力が一定時間止まらなかったため待機を打ち切りました。コマンドがまだ実行中の可能性があります)'
                 }
@@ -263,8 +298,8 @@ export class OllamaChatTabComponent extends BaseTabComponent {
             })
             .join('\n\n')
         const text = `[コマンド実行結果]\n${summary}`
-        this.history.push({ role: 'user', content: text })
-        this.messages.push({
+        this.pushHistory({ role: 'user', content: text })
+        this.pushMessage({
             role: 'system',
             textSegments: [`${results.length}件のコマンドを実行しました。結果について質問できます。`],
             blocks: [],
@@ -320,26 +355,35 @@ export class OllamaChatTabComponent extends BaseTabComponent {
     }
 
     async runMacro (macro: OllamaAssistantMacro): Promise<void> {
-        if (this.multiServerMode) {
-            await this.runMacroOnSelectedServers(macro)
+        if (this.executing) {
+            this.notifications.error('他のコマンドを実行中です。完了するまでお待ちください。')
             return
         }
-        const session = this.resolveTargetSession()
-        if (!session) {
-            return
-        }
-        const results: { command: string, output: string, timedOut: boolean }[] = []
-        this.messages.push({
-            role: 'system',
-            textSegments: [`マクロ「${macro.name}」を実行しています...`],
-            blocks: [],
-        })
-        this.scrollToBottom()
-        await this.macros.run(macro.commands, session, result => {
-            results.push(result)
+        this.executing = true
+        try {
+            if (this.multiServerMode) {
+                await this.runMacroOnSelectedServers(macro)
+                return
+            }
+            const session = this.resolveTargetSession()
+            if (!session) {
+                return
+            }
+            const results: MacroRunResult[] = []
+            this.pushMessage({
+                role: 'system',
+                textSegments: [`マクロ「${macro.name}」を実行しています...`],
+                blocks: [],
+            })
             this.scrollToBottom()
-        })
-        this.shareResultsWithChat(results)
+            await this.macros.run(macro.commands, session, result => {
+                results.push(result)
+                this.scrollToBottom()
+            })
+            this.shareResultsWithChat(results)
+        } finally {
+            this.executing = false
+        }
     }
 
     private async runMacroOnSelectedServers (macro: OllamaAssistantMacro): Promise<void> {
@@ -349,14 +393,14 @@ export class OllamaChatTabComponent extends BaseTabComponent {
             return
         }
 
-        const resultsByTab = new Map<BaseTerminalTabComponent<any>, { command: string, output: string, timedOut: boolean }[]>()
+        const resultsByTab = new Map<BaseTerminalTabComponent<any>, MacroRunResult[]>()
         const sessionToTab = new Map<BaseSession, BaseTerminalTabComponent<any>>()
         for (const tab of tabs) {
             resultsByTab.set(tab, [])
             sessionToTab.set(tab.session!, tab)
         }
 
-        this.messages.push({
+        this.pushMessage({
             role: 'system',
             textSegments: [`マクロ「${macro.name}」を${tabs.length}台のサーバーに同時実行しています...`],
             blocks: [],
@@ -375,12 +419,12 @@ export class OllamaChatTabComponent extends BaseTabComponent {
     }
 
     private shareMultiServerResultsWithChat (
-        resultsByTab: Map<BaseTerminalTabComponent<any>, { command: string, output: string, timedOut: boolean }[]>,
+        resultsByTab: Map<BaseTerminalTabComponent<any>, MacroRunResult[]>,
     ): void {
         const sections = [...resultsByTab.entries()].map(([tab, results]) => {
             const body = results
                 .map(r => {
-                    let line = `$ ${r.command}\n${r.output.trim()}`
+                    let line = `$ ${r.command}\n${truncateForAi(r.output.trim())}`
                     if (r.timedOut) {
                         line += '\n(出力が一定時間止まらなかったため待機を打ち切りました。コマンドがまだ実行中の可能性があります)'
                     }
@@ -391,8 +435,8 @@ export class OllamaChatTabComponent extends BaseTabComponent {
         }).join('\n\n')
 
         const text = `[複数サーバーでのコマンド実行結果]\n${sections}`
-        this.history.push({ role: 'user', content: text })
-        this.messages.push({
+        this.pushHistory({ role: 'user', content: text })
+        this.pushMessage({
             role: 'system',
             textSegments: [`${resultsByTab.size}台のサーバーでマクロを実行しました。結果について質問できます。`],
             blocks: [],

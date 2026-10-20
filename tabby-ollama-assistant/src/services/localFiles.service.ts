@@ -3,30 +3,13 @@ import * as path from 'path'
 import * as os from 'os'
 import { Injectable } from '@angular/core'
 
+import { wrapFsError } from '../fsErrors'
+
 export interface LocalFile {
     name: string
     fullPath: string
     isDirectory: boolean
     size: number
-}
-
-function describeFsError (error: any): string {
-    const code = error?.code
-    const messages: Record<string, string | undefined> = {
-        EACCES: '権限がありません(パーミッションエラー)',
-        EPERM: '操作が許可されていません(権限不足の可能性があります)',
-        ENOENT: 'ファイルまたはフォルダが見つかりません',
-        EEXIST: '同名のファイル/フォルダが既に存在します',
-        ENOTEMPTY: 'フォルダが空ではないため削除できません',
-        EISDIR: 'フォルダに対してファイル操作を行おうとしました',
-        ENOTDIR: 'フォルダではないパスに対してフォルダ操作を行おうとしました',
-        ENOSPC: 'ディスクの空き容量が不足しています',
-    }
-    return messages[code] ?? (error?.message ?? String(error))
-}
-
-function wrapFsError (operation: string, targetPath: string, error: any): Error {
-    return new Error(`${operation}に失敗しました (${targetPath}): ${describeFsError(error)}`)
 }
 
 @Injectable({ providedIn: 'root' })

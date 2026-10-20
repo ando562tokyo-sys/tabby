@@ -36,12 +36,16 @@ export class LoggingButtonProvider extends ToolbarButtonProvider {
             this.notifications.error('ログを保存する端末タブを選択してください。')
             return
         }
-        if (this.logging.isLogging(tab.session)) {
-            this.logging.stop(tab.session)
-            this.notifications.info('セッションログの保存を停止しました。')
-        } else {
-            const logPath = this.logging.start(tab.session, tab.title)
-            this.notifications.info(`ログを保存しています: ${logPath}`)
+        try {
+            if (this.logging.isLogging(tab.session)) {
+                this.logging.stop(tab.session)
+                this.notifications.info('セッションログの保存を停止しました。')
+            } else {
+                const logPath = this.logging.start(tab.session, tab.title)
+                this.notifications.info(`ログを保存しています: ${logPath}`)
+            }
+        } catch (error) {
+            this.notifications.error(error.message ?? String(error))
         }
     }
 }

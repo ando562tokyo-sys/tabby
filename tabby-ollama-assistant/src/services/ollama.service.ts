@@ -20,12 +20,22 @@ export class OllamaService {
 
     async listModels (): Promise<string[]> {
         const endpoint = normalizeEndpoint(this.settings.endpoint)
-        const response = await fetch(`${endpoint}/api/tags`)
+        const response = await this.fetchOllama(`${endpoint}/api/tags`)
         if (!response.ok) {
             throw new Error(`Ollamaからエラーが返されました (HTTP ${response.status})`)
         }
         const data = await response.json()
         return (data.models ?? []).map((m: any) => m.name)
+    }
+
+    /** Wraps fetch() so a connection failure (Ollama not running, wrong endpoint, etc.)
+     * gives a clear Japanese message instead of a raw "Failed to fetch". */
+    private async fetchOllama (url: string, init?: RequestInit): Promise<Response> {
+        try {
+            return await fetch(url, init)
+        } catch {
+            throw new Error(`Ollama (${url}) に接続できませんでした。Ollamaが起動しているか、エンドポイントの設定を確認してください。`)
+        }
     }
 
     /**
@@ -45,7 +55,7 @@ export class OllamaService {
             ? [{ role: 'system', content: this.settings.systemPrompt }, ...messages]
             : messages
 
-        const response = await fetch(`${endpoint}/api/chat`, {
+        const response = await this.fetchOllama(`${endpoint}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -76,7 +86,13 @@ export class OllamaService {
                 if (!line.trim()) {
                     continue
                 }
-                const parsed = JSON.parse(line)
+                let parsed: any = null
+                try {
+                    parsed = JSON.parse(line)
+                } catch {
+                    // 途切れた/壊れた1行は無視して継続する(ストリーミング全体を失わせない)
+                    continue
+                }
                 if (parsed.message?.content) {
                     full += parsed.message.content
                     onChunk(parsed.message.content)

@@ -11,6 +11,9 @@
             span.text-muted.small(*ngIf='!targetTabs.length') (端末タブを開くと選択できます。チャットでの相談だけなら不要です)
             button.btn.btn-link.btn-sm((click)='toggleNotes()', *ngIf='targetProfile', title='サーバーメモ')
                 i.fas.fa-note-sticky
+            span.text-muted.small.ms-2(*ngIf='executing')
+                i.fas.fa-spinner.fa-spin.me-1
+                span コマンド実行中...
             .flex-grow-1
             button.btn.btn-link.btn-sm((click)='showMacros = !showMacros')
                 i.fas.fa-list.me-1
@@ -57,7 +60,7 @@
                             .mt-2(*ngIf='message.blocks[i].phase === "proposal"')
                                 button.btn.btn-sm.btn-primary.me-2(
                                     (click)='runBlock(message.blocks[i])',
-                                    [disabled]='!targetTabs.length',
+                                    [disabled]='!targetTabs.length || executing',
                                 )
                                     i.fas.fa-play.me-1
                                     span 実行する
@@ -109,7 +112,7 @@
 
         .macro-item.d-flex.align-items-center.mb-1(*ngFor='let macro of macros.list()')
             span.flex-grow-1 {{macro.name}}
-            button.btn.btn-sm.btn-link((click)='runMacro(macro)', [disabled]='!canRunMacro', title='実行')
+            button.btn.btn-sm.btn-link((click)='runMacro(macro)', [disabled]='!canRunMacro || executing', title='実行')
                 i.fas.fa-play
             button.btn.btn-sm.btn-link((click)='openMacroForm(macro)', title='編集')
                 i.fas.fa-pen

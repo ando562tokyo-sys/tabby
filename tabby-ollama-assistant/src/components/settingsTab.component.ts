@@ -16,6 +16,7 @@ export class OllamaSettingsTabComponent {
     keygenComment = ''
     generatedPrivateKey = ''
     generatedPublicKey = ''
+    generatingKey = false
 
     sshProfiles: Profile[] = []
     selectedProfileId = ''
@@ -64,13 +65,20 @@ export class OllamaSettingsTabComponent {
         this.config.save()
     }
 
-    generateKeyPair (): void {
+    async generateKeyPair (): Promise<void> {
         if (this.generatedPrivateKey && !window.confirm('既に生成した鍵が表示されています。新しい鍵ペアを生成すると表示が上書きされます。よろしいですか?')) {
             return
         }
-        const pair = this.keygen.generate(this.keygenComment)
-        this.generatedPrivateKey = pair.privateKey
-        this.generatedPublicKey = pair.publicKey
+        this.generatingKey = true
+        try {
+            const pair = await this.keygen.generate(this.keygenComment)
+            this.generatedPrivateKey = pair.privateKey
+            this.generatedPublicKey = pair.publicKey
+        } catch (error) {
+            this.notifications.error(error.message ?? String(error))
+        } finally {
+            this.generatingKey = false
+        }
     }
 
     copyToClipboard (text: string): void {

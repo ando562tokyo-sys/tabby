@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core'
-import { ToolbarButtonProvider, ToolbarButton, NotificationsService } from 'tabby-core'
+import { ToolbarButtonProvider, ToolbarButton, HotkeysService, NotificationsService } from 'tabby-core'
 import { MultifocusService } from 'tabby-terminal'
 
 /**
@@ -7,6 +7,13 @@ import { MultifocusService } from 'tabby-terminal'
  * broadcasts keystrokes from the focused terminal to every other open
  * terminal tab) - previously only reachable via a hotkey with no persistent
  * UI affordance to turn it back off.
+ *
+ * `active` is tracked locally since MultifocusService exposes no public getter
+ * for its state. Tabby also binds default hotkeys (Ctrl-Alt-Shift-I / Ctrl-Shift-I)
+ * straight to MultifocusService, bypassing this button, so this also listens for
+ * those same hotkeys to keep `active` in sync when they're used instead of the
+ * button; there is no equivalent "cancel" hotkey to mirror, since Tabby doesn't
+ * expose one.
  */
 @Injectable()
 export class BroadcastButtonProvider extends ToolbarButtonProvider {
@@ -15,8 +22,14 @@ export class BroadcastButtonProvider extends ToolbarButtonProvider {
     constructor (
         private multifocus: MultifocusService,
         private notifications: NotificationsService,
+        hotkeys: HotkeysService,
     ) {
         super()
+        hotkeys.hotkey$.subscribe(hotkey => {
+            if (hotkey === 'focus-all-tabs' || hotkey === 'pane-focus-all') {
+                this.active = true
+            }
+        })
     }
 
     provide (): ToolbarButton[] {

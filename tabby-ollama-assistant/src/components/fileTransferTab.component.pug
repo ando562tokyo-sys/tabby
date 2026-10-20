@@ -42,8 +42,8 @@
                 p.text-muted.small.p-2(*ngIf='!localEntries.length') (空です)
 
         .pane-actions.d-flex.flex-column.justify-content-center.px-2
-            button.btn.btn-primary.btn-sm.mb-2((click)='uploadSelected()', [disabled]='!sftp', title='ローカル→リモートへアップロード') →
-            button.btn.btn-primary.btn-sm((click)='downloadSelected()', [disabled]='!sftp', title='リモート→ローカルへダウンロード') ←
+            button.btn.btn-primary.btn-sm.mb-2((click)='uploadSelected()', [disabled]='!sftp || transfers.length > 0', title='ローカル→リモートへアップロード') →
+            button.btn.btn-primary.btn-sm((click)='downloadSelected()', [disabled]='!sftp || transfers.length > 0', title='リモート→ローカルへダウンロード') ←
 
         .pane.d-flex.flex-column
             .pane-header.d-flex.align-items-center.px-2.py-1.border-bottom

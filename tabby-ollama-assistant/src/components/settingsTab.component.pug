@@ -53,8 +53,10 @@ p.text-muted.small
         placeholder='user@host',
         [(ngModel)]='keygenComment',
     )
-button.btn.btn-primary.mb-3((click)='generateKeyPair()')
-    span RSA 4096bitの鍵ペアを生成
+button.btn.btn-primary.mb-3((click)='generateKeyPair()', [disabled]='generatingKey')
+    i.fas.fa-spinner.fa-spin.me-1(*ngIf='generatingKey')
+    span(*ngIf='!generatingKey') RSA 4096bitの鍵ペアを生成
+    span(*ngIf='generatingKey') 生成中...
 
 div(*ngIf='generatedPrivateKey')
     .form-line

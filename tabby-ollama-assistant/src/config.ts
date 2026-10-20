@@ -22,15 +22,6 @@ export interface OllamaAssistantMacro {
     commands: string[]
 }
 
-export interface OllamaAssistantConfig {
-    endpoint: string
-    model: string
-    systemPrompt: string
-    macros: OllamaAssistantMacro[]
-    /** サーバー(SSHプロファイル)のid -> メモ本文 */
-    serverNotes: Record<string, string>
-}
-
 /** @hidden */
 export class OllamaAssistantConfigProvider extends ConfigProvider {
     defaults = {

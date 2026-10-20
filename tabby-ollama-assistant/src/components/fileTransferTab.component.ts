@@ -6,6 +6,7 @@ import { SFTPFile, SFTPSession, SSHTabComponent } from 'tabby-ssh'
 import { LocalFile, LocalFilesService } from '../services/localFiles.service'
 import { ServerNotesService } from '../services/serverNotes.service'
 import { LocalFileDownload, LocalFileUpload } from '../localFileTransfer'
+import { wrapRemoteError } from '../fsErrors'
 
 interface TransferProgress {
     id: number
@@ -173,7 +174,7 @@ export class FileTransferTabComponent extends BaseTabComponent {
             this.remoteEntries = entries
             this.selectedRemoteName = null
         } catch (error) {
-            this.notifications.error(error.message ?? String(error))
+            this.notifications.error(wrapRemoteError('リモートフォルダの読み込み', newPath, error).message)
         }
     }
 
@@ -191,11 +192,12 @@ export class FileTransferTabComponent extends BaseTabComponent {
         if (!name) {
             return
         }
+        const targetPath = joinRemotePath(this.remotePath, name)
         try {
-            await this.sftp.mkdir(joinRemotePath(this.remotePath, name))
+            await this.sftp.mkdir(targetPath)
             await this.loadRemoteDir(this.remotePath)
         } catch (error) {
-            this.notifications.error(error.message ?? String(error))
+            this.notifications.error(wrapRemoteError('リモートフォルダの作成', targetPath, error).message)
         }
     }
 
@@ -208,7 +210,10 @@ export class FileTransferTabComponent extends BaseTabComponent {
             this.notifications.error('削除する項目を選択してください。')
             return
         }
-        if (!window.confirm(`「${entry.name}」を削除しますか?`)) {
+        const confirmMessage = entry.isDirectory
+            ? `「${entry.name}」を削除しますか?(空でないフォルダは削除できません)`
+            : `「${entry.name}」を削除しますか?`
+        if (!window.confirm(confirmMessage)) {
             return
         }
         try {
@@ -219,7 +224,7 @@ export class FileTransferTabComponent extends BaseTabComponent {
             }
             await this.loadRemoteDir(this.remotePath)
         } catch (error) {
-            this.notifications.error(error.message ?? String(error))
+            this.notifications.error(wrapRemoteError('リモートの削除', entry.fullPath, error).message)
         }
     }
 
@@ -240,19 +245,29 @@ export class FileTransferTabComponent extends BaseTabComponent {
             this.notifications.error('対象サーバーを選択してください。')
             return
         }
+        if (this.transfers.length > 0) {
+            this.notifications.error('他の転送が完了するまでお待ちください。')
+            return
+        }
         const entry = this.localEntries.find(e => e.name === this.selectedLocalName)
         if (!entry || entry.isDirectory) {
             this.notifications.error('アップロードするファイルを選択してください(フォルダの転送には未対応です)。')
             return
         }
+        if (this.remoteEntries.some(e => e.name === entry.name)) {
+            if (!window.confirm(`リモート側に同名の「${entry.name}」が既に存在します。上書きしますか?`)) {
+                return
+            }
+        }
+        const remoteTargetPath = joinRemotePath(this.remotePath, entry.name)
         const transferId = this.beginTransfer(`アップロード: ${entry.name}`)
         try {
             const upload = new LocalFileUpload(entry.fullPath)
             await upload.open()
-            await this.sftp.upload(joinRemotePath(this.remotePath, entry.name), upload)
+            await this.sftp.upload(remoteTargetPath, upload)
             await this.loadRemoteDir(this.remotePath)
         } catch (error) {
-            this.notifications.error(error.message ?? String(error))
+            this.notifications.error(wrapRemoteError('アップロード', remoteTargetPath, error).message)
         } finally {
             this.endTransfer(transferId)
         }
@@ -263,20 +278,29 @@ export class FileTransferTabComponent extends BaseTabComponent {
             this.notifications.error('対象サーバーを選択してください。')
             return
         }
+        if (this.transfers.length > 0) {
+            this.notifications.error('他の転送が完了するまでお待ちください。')
+            return
+        }
         const entry = this.remoteEntries.find(e => e.name === this.selectedRemoteName)
         if (!entry || entry.isDirectory) {
             this.notifications.error('ダウンロードするファイルを選択してください(フォルダの転送には未対応です)。')
             return
         }
+        if (this.localEntries.some(e => e.name === entry.name)) {
+            if (!window.confirm(`ローカル側に同名の「${entry.name}」が既に存在します。上書きしますか?`)) {
+                return
+            }
+        }
+        const localTargetPath = path.join(this.localPath, entry.name)
         const transferId = this.beginTransfer(`ダウンロード: ${entry.name}`)
         try {
-            const localTargetPath = path.join(this.localPath, entry.name)
             const download = new LocalFileDownload(localTargetPath, entry.mode, entry.size)
             await download.open()
             await this.sftp.download(entry.fullPath, download)
             await this.loadLocalDir(this.localPath)
         } catch (error) {
-            this.notifications.error(error.message ?? String(error))
+            this.notifications.error(wrapRemoteError('ダウンロード', entry.fullPath, error).message)
         } finally {
             this.endTransfer(transferId)
         }

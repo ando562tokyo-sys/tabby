@@ -1,5 +1,8 @@
 import * as crypto from 'crypto'
+import { promisify } from 'util'
 import { Injectable } from '@angular/core'
+
+const generateKeyPairAsync = promisify(crypto.generateKeyPair)
 
 export interface SshKeyPair {
     privateKey: string
@@ -30,15 +33,22 @@ function encodeMpint (buffer: Buffer): Buffer {
 /**
  * Generates an RSA 4096 key pair.
  *
- * ssh2 (Tabby's SSH backend, via the `russh`/ssh2 stack) does not parse ed25519 keys in
- * Node's default PKCS#8 PEM output, so this generates a PKCS#1 RSA private key instead,
- * which is directly compatible. The public key is manually converted to the OpenSSH wire
- * format (RFC 4253 6.6) since Node has no built-in exporter for it.
+ * RSA with a PKCS#1 private key is used rather than ed25519 because it's the most
+ * universally-compatible format across SSH implementations (including Tabby's own
+ * `russh`-based backend); Node's default PKCS#8 PEM output for ed25519 is known to be
+ * rejected by some SSH key parsers (e.g. the `ssh2` library), so RSA/PKCS#1 avoids that
+ * risk entirely. The public key is manually converted to the OpenSSH wire format
+ * (RFC 4253 6.6) since Node has no built-in exporter for it; this conversion has been
+ * verified against ssh2's own key parser.
+ *
+ * Runs via the async crypto.generateKeyPair rather than the sync version - RSA 4096
+ * generation can take a second or more, which would otherwise block the renderer's
+ * main thread and freeze the UI.
  */
 @Injectable({ providedIn: 'root' })
 export class KeygenService {
-    generate (comment?: string): SshKeyPair {
-        const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+    async generate (comment?: string): Promise<SshKeyPair> {
+        const { publicKey, privateKey } = await generateKeyPairAsync('rsa', {
             modulusLength: 4096,
             publicKeyEncoding: { type: 'spki', format: 'pem' },
             privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
